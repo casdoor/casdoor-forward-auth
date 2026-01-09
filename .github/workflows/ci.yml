@@ -1,0 +1,43 @@
+name: Go
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.0'
+
+      - name: Run Unit tests
+        run: go test -v ./...
+
+  semantic-release:
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run semantic-release
+        if: github.repository == 'casdoor/casdoor-forward-auth' && github.event_name == 'push'
+        run: |
+          npm install --save-dev semantic-release@17.2.4
+          npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
