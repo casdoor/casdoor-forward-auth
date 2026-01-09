@@ -15,8 +15,9 @@
 package httpstate
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
-	"math/rand"
 	"sync"
 )
 
@@ -35,7 +36,15 @@ func (s *StateMemoryStorage) SetState(state *State) (int, error) {
 	s.Lock()
 	defer s.Unlock()
 
-	nonce := rand.Int()
+	// Generate cryptographically secure random nonce
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, fmt.Errorf("failed to generate random nonce: %w", err)
+	}
+	nonce := int(binary.BigEndian.Uint64(b[:]))
+	if nonce < 0 {
+		nonce = -nonce
+	}
 	s.content[nonce] = state
 	return nonce, nil
 }
@@ -50,7 +59,6 @@ func (s *StateMemoryStorage) PopState(nonce int) (*State, error) {
 
 	delete(s.content, nonce)
 	return state, nil
-
 }
 func (s *StateMemoryStorage) GetState(nonce int) (*State, error) {
 	s.Lock()
@@ -61,5 +69,4 @@ func (s *StateMemoryStorage) GetState(nonce int) (*State, error) {
 	}
 
 	return state, nil
-
 }

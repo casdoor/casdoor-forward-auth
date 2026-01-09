@@ -40,18 +40,18 @@ type Replacement struct {
 func ForwardAuthHandler(c *gin.Context) {
 	clientcode, err := c.Cookie("client-code")
 	if err != nil {
-		fmt.Println("no client code found in cookie")
+		log.Println("no client code found in cookie")
 		ForwardAuthHandlerWithoutState(c)
 		return
 	}
 	clientstate, err := c.Cookie("client-state")
 	if err != nil {
-		fmt.Println("no state found in cookie")
+		log.Println("no state found in cookie")
 		ForwardAuthHandlerWithoutState(c)
 		return
 	}
 	if err := checkCode(clientcode, clientstate); err != nil {
-		fmt.Printf("invalid code and state %s\n", err.Error())
+		log.Printf("invalid code and state: %s\n", err.Error())
 		ForwardAuthHandlerWithoutState(c)
 		return
 	}
@@ -59,7 +59,12 @@ func ForwardAuthHandler(c *gin.Context) {
 }
 
 func ForwardAuthHandlerWithoutState(c *gin.Context) {
-	body, _ := io.ReadAll(c.Request.Body)
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("error reading request body: %s\n", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
+		return
+	}
 	state := httpstate.NewState(c.Request.Method, c.Request.Header, body)
 	stateNonce, err := stateStorage.SetState(state)
 	if err != nil {
@@ -77,17 +82,24 @@ func ForwardAuthHandlerWithoutState(c *gin.Context) {
 }
 
 func ForwardAuthHandlerWithState(c *gin.Context) {
-	fmt.Println("client code checked")
+	log.Println("client code checked")
 
 	var replacement Replacement
 	replacement.ShouldReplaceBody = true
 	replacement.ShouldReplaceHeader = true
 
 	stateString, _ := c.Cookie("client-state")
-	stateNonce, _ := strconv.Atoi(stateString)
+	stateNonce, err := strconv.Atoi(stateString)
+	if err != nil {
+		log.Printf("invalid state nonce %s: %s\n", stateString, err.Error())
+		replacement.ShouldReplaceBody = false
+		replacement.ShouldReplaceHeader = false
+		c.JSON(200, replacement)
+		return
+	}
 	state, err := stateStorage.PopState(stateNonce)
 	if err != nil {
-		fmt.Printf("no related state found, state nonce %s\n", stateString)
+		log.Printf("no related state found, state nonce %s: %s\n", stateString, err.Error())
 		replacement.ShouldReplaceBody = false
 		replacement.ShouldReplaceHeader = false
 		c.JSON(200, replacement)
@@ -105,19 +117,26 @@ func CasdoorCallbackHandler(c *gin.Context) {
 	var splits = strings.Split(config.CurrentConfig.PluginEndpoint, "://")
 	if len(splits) < 2 {
 		c.JSON(500, gin.H{
-			"error": "invalid webhook address in configuration" + stateString,
+			"error": "invalid webhook address in configuration",
 		})
 		return
 	}
 	domain := splits[1]
 	c.SetCookie("client-code", code, 3600, "/", domain, false, true)
 	c.SetCookie("client-state", stateString, 3600, "/", domain, false, true)
-	stateNonce, _ := strconv.Atoi(stateString)
+	stateNonce, err := strconv.Atoi(stateString)
+	if err != nil {
+		log.Printf("invalid state parameter %s: %s\n", stateString, err.Error())
+		c.JSON(500, gin.H{
+			"error": "invalid state parameter",
+		})
+		return
+	}
 	state, err := stateStorage.GetState(stateNonce)
 	if err != nil {
-		fmt.Printf("no related state found, state nonce %s\n", stateString)
+		log.Printf("no related state found, state nonce %s: %s\n", stateString, err.Error())
 		c.JSON(500, gin.H{
-			"error": "no related state found, state nonce " + stateString,
+			"error": "no related state found",
 		})
 		return
 	}
@@ -126,7 +145,6 @@ func CasdoorCallbackHandler(c *gin.Context) {
 	uri := state.Header.Get("X-Forwarded-URI")
 	url := fmt.Sprintf("%s://%s%s", scheme, host, uri)
 	c.Redirect(307, url)
-
 }
 
 func checkCode(code, state string) error {
