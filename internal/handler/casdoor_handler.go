@@ -121,9 +121,13 @@ func CasdoorCallbackHandler(c *gin.Context) {
 		})
 		return
 	}
+	
+	// Determine if we're using HTTPS
+	secure := strings.HasPrefix(config.CurrentConfig.PluginEndpoint, "https://")
 	domain := splits[1]
-	c.SetCookie("client-code", code, 3600, "/", domain, false, true)
-	c.SetCookie("client-state", stateString, 3600, "/", domain, false, true)
+	
+	c.SetCookie("client-code", code, 3600, "/", domain, secure, true)
+	c.SetCookie("client-state", stateString, 3600, "/", domain, secure, true)
 	stateNonce, err := strconv.Atoi(stateString)
 	if err != nil {
 		log.Printf("invalid state parameter %s: %s\n", stateString, err.Error())

@@ -15,15 +15,20 @@
 package handler
 
 import (
-	"fmt"
 	"io"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
 
 func TestHandler(c *gin.Context) {
-	body, _ := io.ReadAll(c.Request.Body)
-	fmt.Println(c.Request.Header, string(body))
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("error reading request body: %s", err.Error())
+		c.JSON(400, gin.H{"error": "failed to read request body"})
+		return
+	}
+	log.Printf("Request received - Headers: %v, Body: %s", c.Request.Header, string(body))
 	var replacement Replacement
 	replacement.ShouldReplaceBody = true
 	replacement.ShouldReplaceHeader = true
