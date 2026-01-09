@@ -1,0 +1,8 @@
+{
+  "casdoorEndpoint": "http://localhost:8000",
+  "casdoorClientId": "YOUR_CLIENT_ID",
+  "casdoorClientSecret": "YOUR_CLIENT_SECRET",
+  "casdoorOrganization": "YOUR_ORGANIZATION",
+  "casdoorApplication": "YOUR_APPLICATION",
+  "pluginEndpoint": "http://localhost:9999"
+}
