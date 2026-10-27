@@ -129,9 +129,9 @@ Settings come from a JSON file (`-config config.json` or the `CONFIG_FILE` envir
 
 | Endpoint | Used by | Behavior |
 |---|---|---|
-| `/auth` | Traefik, Caddy | `200` + identity headers when signed in; otherwise `302` to the login for `GET`/`HEAD` and `401` for other methods (from `X-Forwarded-Method`). `403` when signed in without a [required role or group](#restricting-access) |
+| `/auth` | Traefik, Caddy | `200` + identity headers when signed in; otherwise `302` to the login for `GET`/`HEAD` and `401` for other methods (from `X-Forwarded-Method`). `403` when signed in without a [required role or group](#restricting-access). Passes `provider_hint` on to the login, see [Skipping the Casdoor login page](#skipping-the-casdoor-login-page) |
 | `/verify` | Nginx | `200` + identity headers when signed in, otherwise `401`. `403` when signed in without a required role or group |
-| `/login?rd=<url>` | browser | Starts the login and returns to `rd` afterwards |
+| `/login?rd=<url>&provider_hint=<provider>` | browser | Starts the login and returns to `rd` afterwards. `provider_hint` (optional) goes straight to that Casdoor provider |
 | `/callback` | Casdoor | OAuth callback |
 | `/logout?rd=<url>` | browser | Clears the session cookie, then redirects to `rd` (if given) |
 | `/healthz` | monitoring | Returns `ok` |
@@ -165,6 +165,18 @@ A user passes with at least one of the listed roles and, if `groups` is given to
 This also gives you "sign up first, get access later": new users (e.g., from Google sign-up) have no role and get `403` until an admin assigns them one on the Roles page of Casdoor.
 
 Roles and groups are read at login and kept for the lifetime of the session (`sessionTtl`). After changing them in Casdoor, the user has to open `/logout` and sign in again, or wait for the session to end.
+
+## Skipping the Casdoor login page
+
+Add `provider_hint` with the name of a Casdoor provider to send users straight to it (e.g., `provider_oauth_google`) instead of showing the Casdoor login page. It can be combined with `roles` and `groups`:
+
+| Reverse proxy | Setting |
+|---|---|
+| Traefik | `forwardauth.address=http://casdoor-forward-auth:9999/auth?provider_hint=provider_oauth_google` |
+| Caddy | `uri /auth?provider_hint=provider_oauth_google&roles=admin` |
+| Nginx | `return 302 https://auth.example.com/login?provider_hint=provider_oauth_google&rd=$scheme://$http_host$request_uri;` in `@casdoor_login` |
+
+`/login?provider_hint=...` can also be linked to directly.
 
 ## Traefik
 

@@ -442,3 +442,33 @@ func TestBasePath(t *testing.T) {
 		t.Fatalf("login: bad state cookie %+v", cookie)
 	}
 }
+
+func TestProviderHint(t *testing.T) {
+	fc := newFakeCasdoor(t)
+	h := newTestHandler(t, fc, "https://auth.example.com")
+
+	forwarded := http.Header{
+		"X-Forwarded-Proto": {"https"},
+		"X-Forwarded-Host":  {"app.example.com"},
+		"X-Forwarded-Uri":   {"/"},
+	}
+	rec := serve(h, http.MethodGet, "/auth?provider_hint=provider_oauth_google", forwarded)
+	wantLogin := "https://auth.example.com/login?provider_hint=provider_oauth_google&rd=" + url.QueryEscape("https://app.example.com/")
+	if got := rec.Header().Get("Location"); rec.Code != http.StatusFound || got != wantLogin {
+		t.Fatalf("auth: got status %d and redirect %s, want %s", rec.Code, got, wantLogin)
+	}
+
+	rec = serve(h, http.MethodGet, wantLogin, nil)
+	authorizeUrl, err := url.Parse(rec.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := authorizeUrl.Query().Get("provider_hint"); got != "provider_oauth_google" {
+		t.Fatalf("login: got provider_hint %q in %s", got, authorizeUrl)
+	}
+
+	rec = serve(h, http.MethodGet, "/login", nil)
+	if strings.Contains(rec.Header().Get("Location"), "provider_hint") {
+		t.Fatalf("login without hint: unexpected provider_hint in %s", rec.Header().Get("Location"))
+	}
+}

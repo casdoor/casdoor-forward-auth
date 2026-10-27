@@ -109,7 +109,8 @@ func (h *Handler) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, h.getLoginUrl(getOriginalUrl(r)), http.StatusFound)
+	loginUrl := h.getLoginUrl(getOriginalUrl(r), getProviderHint(r))
+	http.Redirect(w, r, loginUrl, http.StatusFound)
 }
 
 // handleVerify is the endpoint for Nginx's auth_request, which only understands
@@ -173,6 +174,9 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	query.Set("redirect_uri", h.conf.ExternalUrl+"/callback")
 	query.Set("scope", "read")
 	query.Set("state", state)
+	if providerHint := getProviderHint(r); providerHint != "" {
+		query.Set("provider_hint", providerHint)
+	}
 	http.Redirect(w, r, h.conf.CasdoorEndpoint+"/login/oauth/authorize?"+query.Encode(), http.StatusFound)
 }
 
@@ -277,7 +281,7 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	user := h.getSessionUser(r)
 	if user == nil {
-		http.Redirect(w, r, h.getLoginUrl(""), http.StatusFound)
+		http.Redirect(w, r, h.getLoginUrl("", ""), http.StatusFound)
 		return
 	}
 
@@ -315,11 +319,18 @@ func (h *Handler) getStateCookieName(state string) string {
 	return h.conf.CookieName + "_state_" + state[:16]
 }
 
-func (h *Handler) getLoginUrl(redirect string) string {
-	if redirect == "" {
+func (h *Handler) getLoginUrl(redirect string, providerHint string) string {
+	query := url.Values{}
+	if redirect != "" {
+		query.Set("rd", redirect)
+	}
+	if providerHint != "" {
+		query.Set("provider_hint", providerHint)
+	}
+	if len(query) == 0 {
 		return h.conf.ExternalUrl + "/login"
 	}
-	return h.conf.ExternalUrl + "/login?rd=" + url.QueryEscape(redirect)
+	return h.conf.ExternalUrl + "/login?" + query.Encode()
 }
 
 // getSafeRedirect returns rd if it points to an allowed domain, otherwise the root of
@@ -375,6 +386,12 @@ func getOriginalUrl(r *http.Request) string {
 		uri = "/" + uri
 	}
 	return scheme + "://" + host + uri
+}
+
+// getProviderHint returns the Casdoor provider to sign in with, e.g., "provider_oauth_google",
+// which skips the Casdoor login page.
+func getProviderHint(r *http.Request) string {
+	return r.URL.Query().Get("provider_hint")
 }
 
 // setIdentityHeaders always sets every header, even empty ones, so the reverse proxy
