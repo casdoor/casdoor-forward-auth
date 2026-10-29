@@ -122,6 +122,7 @@ Settings come from a JSON file (`-config config.json` or the `CONFIG_FILE` envir
 | `allowedRedirectDomains` | `ALLOWED_REDIRECT_DOMAINS` (comma separated) | host of `externalUrl` and `.<cookieDomain>` | Where the user may be sent back after login or logout. `example.com` allows that host only, `.example.com` allows it and all subdomains. Anything else goes to `externalUrl` instead, so the login can't be used as an open redirect |
 | `allowedRoles` | `ALLOWED_ROLES` (comma separated) | empty | Only let in users with at least one of these Casdoor roles, on every protected application. See [Restricting access](#restricting-access) |
 | `allowedGroups` | `ALLOWED_GROUPS` (comma separated) | empty | Only let in users in at least one of these Casdoor groups, e.g., `built-in/dev` |
+| `providerHint` | `PROVIDER_HINT` | empty | Name of a Casdoor provider, e.g., `provider_oauth_google`, to sign in with directly instead of showing the Casdoor login page. See [Signing in with one provider](#signing-in-with-one-provider) |
 | `certificate` | `CERTIFICATE` | empty | PEM certificate for verifying access tokens. When empty, the certificate is looked up in Casdoor's JWKS (`/.well-known/jwks`) by the token's key ID, which also follows certificate changes |
 | `listenAddr` | `LISTEN_ADDR` | `:9999` | Address to listen on |
 
@@ -129,9 +130,9 @@ Settings come from a JSON file (`-config config.json` or the `CONFIG_FILE` envir
 
 | Endpoint | Used by | Behavior |
 |---|---|---|
-| `/auth` | Traefik, Caddy | `200` + identity headers when signed in; otherwise `302` to the login for `GET`/`HEAD` and `401` for other methods (from `X-Forwarded-Method`). `403` when signed in without a [required role or group](#restricting-access) |
+| `/auth` | Traefik, Caddy | `200` + identity headers when signed in; otherwise `302` to the login for `GET`/`HEAD` and `401` for other methods (from `X-Forwarded-Method`). `403` when signed in without a [required role or group](#restricting-access). `provider_hint` is passed on to `/login` |
 | `/verify` | Nginx | `200` + identity headers when signed in, otherwise `401`. `403` when signed in without a required role or group |
-| `/login?rd=<url>` | browser | Starts the login and returns to `rd` afterwards |
+| `/login?rd=<url>` | browser | Starts the login and returns to `rd` afterwards. With `provider_hint=<provider>`, goes straight to that Casdoor provider |
 | `/callback` | Casdoor | OAuth callback |
 | `/logout?rd=<url>` | browser | Clears the session cookie, then redirects to `rd` (if given) |
 | `/healthz` | monitoring | Returns `ok` |
@@ -165,6 +166,18 @@ A user passes with at least one of the listed roles and, if `groups` is given to
 This also gives you "sign up first, get access later": new users (e.g., from Google sign-up) have no role and get `403` until an admin assigns them one on the Roles page of Casdoor.
 
 Roles and groups are read at login and kept for the lifetime of the session (`sessionTtl`). After changing them in Casdoor, the user has to open `/logout` and sign in again, or wait for the session to end.
+
+## Signing in with one provider
+
+When users should always sign in with the same provider, e.g., your company's Google Workspace, skip the Casdoor login page and send them straight to the provider with Casdoor's `provider_hint`. Set it for all applications with `providerHint` in the [configuration](#configuration), or per application on the URL the reverse proxy uses for the login, which also overrides `providerHint`:
+
+| Reverse proxy | Setting |
+|---|---|
+| Traefik | `forwardauth.address=http://casdoor-forward-auth:9999/auth?provider_hint=provider_oauth_google` |
+| Caddy | `uri /auth?provider_hint=provider_oauth_google` |
+| Nginx | `return 302 https://auth.example.com/login?provider_hint=provider_oauth_google&rd=$scheme://$http_host$request_uri;` in `@casdoor_login` |
+
+Use the provider's **Name** in Casdoor, not its display name, and add the provider to the Casdoor application. When the application doesn't have it, Casdoor shows its login page as usual. It can be combined with `roles` and `groups`, e.g., `/auth?provider_hint=provider_oauth_google&roles=admin`.
 
 ## Traefik
 

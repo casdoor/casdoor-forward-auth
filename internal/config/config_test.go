@@ -72,13 +72,14 @@ func TestLoadEnv(t *testing.T) {
 	t.Setenv("SESSION_TTL", "1h30m")
 	t.Setenv("ALLOWED_REDIRECT_DOMAINS", "app.example.com, .example.org")
 	t.Setenv("CASDOOR_INTERNAL_ENDPOINT", "http://casdoor:8000/")
+	t.Setenv("PROVIDER_HINT", "provider_oauth_google")
 
 	conf, err := Load(writeConfig(t, validConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if conf.ClientSecret != "secret-from-env" || conf.SessionDuration != 90*time.Minute || conf.CasdoorInternalEndpoint != "http://casdoor:8000" {
+	if conf.ClientSecret != "secret-from-env" || conf.SessionDuration != 90*time.Minute || conf.CasdoorInternalEndpoint != "http://casdoor:8000" || conf.ProviderHint != "provider_oauth_google" {
 		t.Errorf("env not applied: %+v", conf)
 	}
 	if conf.IsSecure() || conf.BasePath() != "/_auth" {

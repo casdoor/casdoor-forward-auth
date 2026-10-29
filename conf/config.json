@@ -13,5 +13,6 @@
   "sessionTtl": "24h",
   "allowedRedirectDomains": [],
   "allowedRoles": [],
-  "allowedGroups": []
+  "allowedGroups": [],
+  "providerHint": ""
 }

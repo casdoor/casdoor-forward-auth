@@ -40,6 +40,7 @@ type Config struct {
 	AllowedRedirectDomains  []string `json:"allowedRedirectDomains"`
 	AllowedRoles            []string `json:"allowedRoles"`
 	AllowedGroups           []string `json:"allowedGroups"`
+	ProviderHint            string   `json:"providerHint"`
 
 	SessionDuration time.Duration  `json:"-"`
 	CasdoorRootCas  *x509.CertPool `json:"-"`
@@ -81,6 +82,7 @@ func (conf *Config) loadEnv() {
 		"COOKIE_NAME":               &conf.CookieName,
 		"COOKIE_DOMAIN":             &conf.CookieDomain,
 		"SESSION_TTL":               &conf.SessionTtl,
+		"PROVIDER_HINT":             &conf.ProviderHint,
 	}
 	for name, field := range vars {
 		if value, ok := os.LookupEnv(name); ok {

@@ -424,6 +424,49 @@ func TestSafeRedirect(t *testing.T) {
 	}
 }
 
+func TestProviderHint(t *testing.T) {
+	fc := newFakeCasdoor(t)
+	h := newTestHandler(t, fc, "https://auth.example.com")
+
+	getHint := func(target string, header http.Header) string {
+		rec := serve(h, http.MethodGet, target, header)
+		authorizeUrl, err := url.Parse(rec.Header().Get("Location"))
+		if err != nil || rec.Code != http.StatusFound {
+			t.Fatalf("%s: got status %d and redirect %s", target, rec.Code, rec.Header().Get("Location"))
+		}
+		return authorizeUrl.Query().Get("provider_hint")
+	}
+
+	forwarded := http.Header{
+		"X-Forwarded-Proto": {"https"},
+		"X-Forwarded-Host":  {"app.example.com"},
+		"X-Forwarded-Uri":   {"/dashboard"},
+	}
+	rec := serve(h, http.MethodGet, "/auth?provider_hint=provider_oauth_github&roles=admin", forwarded)
+	loginUrl, _ := url.Parse(rec.Header().Get("Location"))
+	if got := loginUrl.Query(); got.Get("provider_hint") != "provider_oauth_github" || got.Get("rd") != "https://app.example.com/dashboard" || got.Has("roles") {
+		t.Fatalf("auth: got redirect %s", loginUrl)
+	}
+	if got := getHint(loginUrl.String(), nil); got != "provider_oauth_github" {
+		t.Errorf("login from auth: got provider_hint %q", got)
+	}
+
+	if got := getHint("/login", nil); got != "" {
+		t.Errorf("login without hint: got provider_hint %q", got)
+	}
+
+	h.conf.ProviderHint = "provider_oauth_google"
+	if got := getHint("/login", nil); got != "provider_oauth_google" {
+		t.Errorf("login with providerHint: got provider_hint %q", got)
+	}
+	if got := getHint("/login?provider_hint=provider_oauth_github", nil); got != "provider_oauth_github" {
+		t.Errorf("query overriding providerHint: got provider_hint %q", got)
+	}
+	if got := getHint("/", nil); got != "" {
+		t.Errorf("index: got provider_hint %q in the login URL", got)
+	}
+}
+
 func TestBasePath(t *testing.T) {
 	fc := newFakeCasdoor(t)
 	h := newTestHandler(t, fc, "https://app.example.com/_auth")

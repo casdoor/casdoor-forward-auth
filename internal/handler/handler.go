@@ -109,7 +109,7 @@ func (h *Handler) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, h.getLoginUrl(getOriginalUrl(r)), http.StatusFound)
+	http.Redirect(w, r, h.getLoginUrl(getOriginalUrl(r), r.URL.Query().Get("provider_hint")), http.StatusFound)
 }
 
 // handleVerify is the endpoint for Nginx's auth_request, which only understands
@@ -173,6 +173,9 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	query.Set("redirect_uri", h.conf.ExternalUrl+"/callback")
 	query.Set("scope", "read")
 	query.Set("state", state)
+	if providerHint := h.getProviderHint(r); providerHint != "" {
+		query.Set("provider_hint", providerHint)
+	}
 	http.Redirect(w, r, h.conf.CasdoorEndpoint+"/login/oauth/authorize?"+query.Encode(), http.StatusFound)
 }
 
@@ -277,7 +280,7 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 	user := h.getSessionUser(r)
 	if user == nil {
-		http.Redirect(w, r, h.getLoginUrl(""), http.StatusFound)
+		http.Redirect(w, r, h.getLoginUrl("", ""), http.StatusFound)
 		return
 	}
 
@@ -315,11 +318,28 @@ func (h *Handler) getStateCookieName(state string) string {
 	return h.conf.CookieName + "_state_" + state[:16]
 }
 
-func (h *Handler) getLoginUrl(redirect string) string {
-	if redirect == "" {
+func (h *Handler) getLoginUrl(redirect string, providerHint string) string {
+	query := url.Values{}
+	if redirect != "" {
+		query.Set("rd", redirect)
+	}
+	if providerHint != "" {
+		query.Set("provider_hint", providerHint)
+	}
+	if len(query) == 0 {
 		return h.conf.ExternalUrl + "/login"
 	}
-	return h.conf.ExternalUrl + "/login?rd=" + url.QueryEscape(redirect)
+	return h.conf.ExternalUrl + "/login?" + query.Encode()
+}
+
+// getProviderHint returns the Casdoor provider the login goes straight to, skipping the
+// Casdoor login page: the "provider_hint" query parameter, otherwise providerHint of the
+// config. Casdoor shows its login page as usual when the application has no such provider.
+func (h *Handler) getProviderHint(r *http.Request) string {
+	if providerHint := r.URL.Query().Get("provider_hint"); providerHint != "" {
+		return providerHint
+	}
+	return h.conf.ProviderHint
 }
 
 // getSafeRedirect returns rd if it points to an allowed domain, otherwise the root of
